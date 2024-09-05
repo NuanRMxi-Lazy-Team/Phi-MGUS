@@ -1,4 +1,4 @@
-﻿namespace Phi_MGUP;
+﻿namespace Phi_MGUS;
 
 public class LogManager
 {
