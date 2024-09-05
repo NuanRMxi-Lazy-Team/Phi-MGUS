@@ -105,7 +105,9 @@ public static class GameManager
         /// <param name="user"></param>
         public bool Register(User user)
         {
-            // Check if userName exists, if exists, return false | 判断用户名是否存在，如果存在，返回false
+            // Check if the username exists, return false if it exists, and prevent non anonymous users from using anonymous usernames. | 判断用户名是否存在，如果存在，返回false，并阻止非匿名用户使用匿名用户名
+            if (!user.isAnonymous && user.userName == "anonymous")
+                return false;
             if (user.isAnonymous)
             {
                 if (userNameList.Contains(user.userName))

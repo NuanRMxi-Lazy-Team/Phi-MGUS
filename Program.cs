@@ -108,7 +108,7 @@ public class Program
                 LogManager.WriteLog("User List:");
                 foreach (var user in users)
                 {
-                    LogManager.WriteLog($"{user.userName} - {user.userName}");
+                    LogManager.WriteLog($"{user.userName} - {user.Client.token}");
                 }
             }
         }
