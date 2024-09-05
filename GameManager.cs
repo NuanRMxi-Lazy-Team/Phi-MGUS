@@ -14,7 +14,6 @@ public static class GameManager
         /// Token List | Token列表
         /// </summary>
         private List<string> tokens = new();
-        public UserList users = new();
         
         /// <summary>
         /// Using Token to Drop Client
@@ -148,6 +147,10 @@ public static class GameManager
         }
     }
     
+    public class RoomList : List<Room>
+    {
+        
+    }
     /// <summary>
     /// Room | 多人房间
     /// </summary>
@@ -164,7 +167,7 @@ public static class GameManager
     /// </summary>
     public class User
     {
-        public Client client = new();
+        public Client Client = new();
         public string userName = "anonymous";
         public bool isSpectator = false;
         public bool isDebugger = false;

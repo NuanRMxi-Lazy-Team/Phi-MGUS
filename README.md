@@ -4,4 +4,5 @@ MGUS，也就是Multiplayer Game Universal Server的简写，项目全称**Phigr
 
 # 项目介绍
 该项目作为的服务端，服务端为一个 `WebSocket` 服务器，客户端只需接入服务端即可进行多人游戏，相关文档在另一个项目中。  
-请见：https://github.com/Phi-MGUP/Phi-MGUP-docs
+请见：https://github.com/NuanRMxi-Lazy-Team/Phi-MGUS-docs  
+放心，还没写完。

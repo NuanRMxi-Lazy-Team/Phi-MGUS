@@ -10,9 +10,7 @@ namespace Phi_MGUS
         public class Message
         {
             public string action = "";
-
             public string token = "";
-            //public object data = new object();
         }
 
         /// <summary>
@@ -21,27 +19,33 @@ namespace Phi_MGUS
         public static class Server
         {
             /// <summary>
-            /// Get client metadata message
+            /// Get client metadata message | 获取客户端元数据消息
             /// </summary>
             public class GetData : Message
             {
                 public new readonly string action = "getData";
                 public bool needPassword = false;
             }
-
+            
+            /// <summary>
+            /// Join server failed message | 加入服务器失败消息
+            /// </summary>
             public class JoinServerFailed : Message
             {
                 public new readonly string action = "joinServerFailed";
                 public string reason = "unknown";
             }
 
+            /// <summary>
+            /// Join server success message | 加入服务器成功消息
+            /// </summary>
             public class JoinServerSuccess : Message
             {
                 public new readonly string action = "joinServerSuccess";
             }
 
             /// <summary>
-            /// Room failed message
+            /// Room add failed message | 房间新建失败消息
             /// </summary>
             public class AddRoomFailed : Message
             {
@@ -50,7 +54,7 @@ namespace Phi_MGUS
             }
 
             /// <summary>
-            /// Room success message
+            /// Room success message | 房间新建成功消息
             /// </summary>
             public class AddRoomSuccess : Message
             {
@@ -58,7 +62,7 @@ namespace Phi_MGUS
             }
 
             /// <summary>
-            /// Register failed message
+            /// Register failed message | 注册失败消息
             /// </summary>
             public class RegisterFailed : Message
             {
@@ -67,7 +71,7 @@ namespace Phi_MGUS
             }
 
             /// <summary>
-            /// Register success message
+            /// Register success message | 注册成功消息
             /// </summary>
             public class RegisterSuccess : Message
             {

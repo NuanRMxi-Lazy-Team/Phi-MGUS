@@ -13,7 +13,7 @@ public class Program
     };
 
     private static GameManager.ClientList clients = new();
-    //private static GameManager.UserList users = new();
+    private static GameManager.UserList users = new();
 
 
     private static void Main(string[] args)
@@ -75,6 +75,7 @@ public class Program
             socket.OnClose += () =>
             {
                 LogManager.WriteLog("Client disconnected.");
+                clients.Drop(socket);
                 // TODO: add client disconnected event
             };
 
@@ -88,9 +89,28 @@ public class Program
                 socket.Close();
             };
         });
+        LogManager.WriteLog($"Server started at {config.Host + ":" + config.Port}");
         while (true)
         {
-            Console.ReadLine();
+            string command = Console.ReadLine();
+            if (command == "clientlist")
+            {
+                //print all client
+                LogManager.WriteLog("Client List:");
+                foreach (var client in clients)
+                {
+                    LogManager.WriteLog($"{client.token} - {client.user?.userName ?? "null"}");
+                }
+            }
+            else if (command == "userlist")
+            {
+                //print all user
+                LogManager.WriteLog("User List:");
+                foreach (var user in users)
+                {
+                    LogManager.WriteLog($"{user.userName} - {user.userName}");
+                }
+            }
         }
     }
 
@@ -119,14 +139,19 @@ public class Program
             if (clients.GetClientAsToken(msg.token) != null)
             {
                 //illegal client, Drop it | 非法客户端，丢弃并断开连接
+                LogManager.WriteLog("illegal client, Drop it.", LogManager.LogLevel.Warning);
+                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinServerFailed()
+                {
+                    reason = "The client is already connected to the server.\nYour connection will be closed.",
+                    token = clientMetaData.token
+                }));
                 clients.Drop(socket);
                 socket.Close();
                 return;
             }
 
             var data = (dynamic)clientMetaData.data;
-            ConnectionMessage.Client.FeatureSupport featSup =
-                JsonConvert.DeserializeObject<ConnectionMessage.Client.FeatureSupport>(data.features)!;
+            ConnectionMessage.Client.FeatureSupport featSup = data.features;
             if (config.isPrivate)
             {
                 if (string.IsNullOrEmpty(data.password) || data.password != config.Password)
@@ -151,21 +176,50 @@ public class Program
                 token = clientMetaData.token,
                 featureSupport = GameManager.Client.FeatureSupport.ToGameManagerFeatureSupport(featSup)
             });
+            await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinServerSuccess
+            {
+                token = clientMetaData.token
+            }));
         }
-        else if (msg.action == "Register")
+        else if (msg.action == "register")
         {
             var regData = JsonConvert.DeserializeObject<ConnectionMessage.Client.Register>(message)!;
-            if (clients.GetClientAsToken(regData.token) != null)
+            if (clients.GetClientAsSocket(socket) != null)
             {
                 //TODO: add client registered event | 添加客户端注册事件
-                GameManager.User user = JsonConvert.DeserializeObject<GameManager.User>((dynamic)regData.data)!;
-                user.client = clients.GetClientAsToken(regData.token)!;
-                if (clients.users.Register(user))
+                GameManager.User user = new GameManager.User
                 {
+                    Client = clients.GetClientAsSocket(socket)!,
+                    userName = ((dynamic)regData.data).userName,
+                    isAnonymous = ((dynamic)regData.data).isAnonymous,
+                    isDebugger = ((dynamic)regData.data).isDebugger,
+                    isSpectator = ((dynamic)regData.data).isSpectator
+                };
+                if (user.isDebugger || user.isSpectator)
+                {
+                    if (((dynamic)regData.data).authentication != "nan")
+                    {
+                        LogManager.WriteLog($"Client {regData.token} failed to register as {user.userName},because authentication failed.");
+                        //Send RegisterFailed and reason | 发送注册失败以及原因消息
+                        await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.RegisterFailed
+                        {
+                            reason = "Authentication failed" //鉴权失败
+                        }));
+                        return;
+                    }
+                }
+                
+                if (users.Register(user))
+                {
+                    clients.GetClientAsSocket(socket)!.user = user;
+                    LogManager.WriteLog($"Client {regData.token} registered as {user.userName}.");
+                    //Send RegisterSuccess message | 发送注册成功消息
                     await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.RegisterSuccess()));
                 }
                 else
                 {
+                    LogManager.WriteLog($"Client {regData.token} failed to register as {user.userName},because username already exists.");
+                    //Send RegisterFailed and reason | 发送注册失败以及原因消息
                     await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.RegisterFailed
                     {
                         reason = "username already exists" // username already exists | 用户名已存在
@@ -196,22 +250,17 @@ public class Program
     private static async Task ServerOnError(Exception e, IWebSocketConnection socket)
     {
         LogManager.WriteLog(e.Message, LogManager.LogLevel.Debug);
-        if (e is AggregateException)
-        {
-            LogManager.WriteLog("The client used an incorrect connection method.", LogManager.LogLevel.Debug);
-        }
-        else
-        {
-            LogManager.WriteLog("Socket has been drop", LogManager.LogLevel.Debug);
-        }
+        //WriteLog | 输出日志
+        LogManager.WriteLog("Socket has been drop, because of an error: " + e.Message, LogManager.LogLevel.Error);
+        
 
-        //Drop and disconnect| 丢弃并断开连接
+        //Drop and disconnect | 丢弃并断开连接
         clients.Drop(socket);
         socket.Close();
     }
 
     /// <summary>
-    /// Server configuration file
+    /// Server configuration file | 服务器配置文件
     /// </summary>
     public class Config
     {
@@ -227,7 +276,7 @@ public class Program
     }
 
     /// <summary>
-    /// Broadcast message to all clients
+    /// Broadcast message to all clients | 广播消息给所有客户端
     /// </summary>
     /// <param name="message"></param>
     public static void Broadcast(string message)
