@@ -12,8 +12,8 @@ public class Program
         isDebug = true
     };
 
-    private static GameManager.ClientList clients = new();
-    private static GameManager.UserList users = new();
+    //private static GameManager.ClientList clients = new();
+    //private static GameManager.UserList users = new();
 
 
     private static void Main(string[] args)
@@ -37,59 +37,86 @@ public class Program
         }
 
         //Start WebSocket Server
-        WebSocketServer server =
-            new WebSocketServer($"{(config.wss ? "wss" : "ws")}://{config.Host}:{config.Port}");
+        WebSocketServer wssserver = new WebSocketServer($"ws://{config.wssOptions.Host}:{config.wssOptions.Port}");
+        WebSocketServer wsserver = new WebSocketServer($"ws://{config.wsOptions.Host}:{config.wsOptions.Port}");
         //set cert
         if (!string.IsNullOrEmpty(config.certPath) && config.wss)
         {
             try
             {
                 // set cert
-                server.Certificate = new X509Certificate2(config.certPath, config.certPassword);
+                wssserver.Certificate = new X509Certificate2(config.certPath, config.certPassword);
             }
             catch (Exception e)
             {
                 LogManager.WriteLog("Secure connection is not enabled or the certificate is invalid.\n" + e.Message,
                     LogManager.LogLevel.Warning);
-                server =
-                    new WebSocketServer($"ws://{config.Host}:{config.Port}");
+                wssserver =
+                    new WebSocketServer($"ws://{config.wssOptions.Host}:{config.wssOptions.Prot}");
             }
         }
         else
         {
             LogManager.WriteLog("Secure connection is not enabled or the certificate is invalid.",
                 LogManager.LogLevel.Warning);
-            server =
-                new WebSocketServer($"ws://{config.Host}:{config.Port}");
+            config.wss = false;
         }
 
         //change Fleck Log Level
         FleckLog.Level = LogLevel.Error;
+        //对两个server的是否开启进行判断，依次赋值给server并启动
 
-        server.Start(socket =>
+        WebSocketServer server = null;
+
+        if (config.wss)
         {
-            socket.OnOpen += async () => await ServerOnOpen(socket);
-            socket.OnMessage += async message => await ServerOnMessage(message, socket);
-            socket.OnError += async e => await ServerOnError(e, socket);
-
-            socket.OnClose += () =>
+            wssserver.Start(socket =>
             {
-                LogManager.WriteLog("Client disconnected.");
-                clients.Drop(socket);
-                // TODO: add client disconnected event
-            };
+                socket.OnOpen += async () => await ServerOnOpen(socket);
+                socket.OnMessage += async message => await ServerOnMessage(message, socket);
+                socket.OnError += async e => await ServerOnError(e, socket);
+                socket.OnClose += async () => await ServerOnClose(socket);
 
-            socket.OnBinary += bytes =>
+                socket.OnBinary += bytes =>
+                {
+                    _ = bytes;
+                    LogManager.WriteLog("illegal Binary data received, Drop.", LogManager.LogLevel.Debug);
+
+                    //Drop and disconnect | 断开连接
+                    clients.Drop(socket);
+                    socket.Close();
+                };
+            });
+        }
+        if (config.ws)
+        {
+            wsserver.Start(socket =>
             {
-                _ = bytes;
-                LogManager.WriteLog("illegal Binary data received, Drop.", LogManager.LogLevel.Debug);
+                socket.OnOpen += async () => await ServerOnOpen(socket);
+                socket.OnMessage += async message => await ServerOnMessage(message, socket);
+                socket.OnError += async e => await ServerOnError(e, socket);
+                socket.OnClose += async () => await ServerOnClose(socket);
 
-                //Drop and disconnect | 断开连接
-                clients.Drop(socket);
-                socket.Close();
-            };
-        });
-        LogManager.WriteLog($"Server started at {config.Host + ":" + config.Port}");
+                socket.OnBinary += bytes =>
+                {
+                    _ = bytes;
+                    LogManager.WriteLog("illegal Binary data received, Drop.", LogManager.LogLevel.Debug);
+
+                    //Drop and disconnect | 断开连接
+                    clients.Drop(socket);
+                    socket.Close();
+                };
+            });
+        }
+
+        if (!config.ws && !config.wss)
+        {
+            throw new Exception("No server is enabled.");
+        }
+
+        // 服务器已启动并同时使用了ws和wss或服务器已启动并只使用了某一个
+        
+        LogManager.WriteLog("The server has been started");
         while (true)
         {
             string command = Console.ReadLine();
@@ -199,7 +226,8 @@ public class Program
                 {
                     if (((dynamic)regData.data).authentication != "nan")
                     {
-                        LogManager.WriteLog($"Client {regData.token} failed to register as {user.userName},because authentication failed.");
+                        LogManager.WriteLog(
+                            $"Client {regData.token} failed to register as {user.userName},because authentication failed.");
                         //Send RegisterFailed and reason | 发送注册失败以及原因消息
                         await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.RegisterFailed
                         {
@@ -208,7 +236,7 @@ public class Program
                         return;
                     }
                 }
-                
+
                 if (users.Register(user))
                 {
                     clients.GetClientAsSocket(socket)!.user = user;
@@ -218,7 +246,8 @@ public class Program
                 }
                 else
                 {
-                    LogManager.WriteLog($"Client {regData.token} failed to register as {user.userName},because username already exists.");
+                    LogManager.WriteLog(
+                        $"Client {regData.token} failed to register as {user.userName},because username already exists.");
                     //Send RegisterFailed and reason | 发送注册失败以及原因消息
                     await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.RegisterFailed
                     {
@@ -252,11 +281,18 @@ public class Program
         LogManager.WriteLog(e.Message, LogManager.LogLevel.Debug);
         //WriteLog | 输出日志
         LogManager.WriteLog("Socket has been drop, because of an error: " + e.Message, LogManager.LogLevel.Error);
-        
+
 
         //Drop and disconnect | 丢弃并断开连接
         clients.Drop(socket);
         socket.Close();
+    }
+    
+    private static async Task ServerOnClose(IWebSocketConnection socket)
+    {
+        LogManager.WriteLog("Client disconnected.");
+        clients.Drop(socket);
+        // TODO: add client disconnected event
     }
 
     /// <summary>
@@ -264,13 +300,23 @@ public class Program
     /// </summary>
     public class Config
     {
-        public string Host = "0.0.0.0";
-        public int Port = 14157;
+        
         public bool isPrivate = false;
         public bool RoomChat = false;
         public bool isDebug = false;
         public string Password = "";
+        public bool ws = true;
         public bool wss = false;
+        public dynamic wsOptions = new
+        {
+            Host = "0.0.0.0",
+            Port = 14156
+        };
+        public dynamic wssOptions = new
+        {
+            Host = "0.0.0.0",
+            Port = 14157
+        };
         public string certPath = "path/to/your/certificate.pfx";
         public string certPassword = "your_certificate_password";
     }

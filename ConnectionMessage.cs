@@ -1,6 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
-
-namespace Phi_MGUS
+﻿namespace Phi_MGUS
 {
     public static class ConnectionMessage
     {
@@ -60,24 +58,6 @@ namespace Phi_MGUS
             {
                 public new readonly string action = "addRoomSuccess";
             }
-
-            /// <summary>
-            /// Register failed message | 注册失败消息
-            /// </summary>
-            public class RegisterFailed : Message
-            {
-                public new readonly string action = "registerFailed";
-                public string reason = "unknown";
-            }
-
-            /// <summary>
-            /// Register success message | 注册成功消息
-            /// </summary>
-            public class RegisterSuccess : Message
-            {
-                public new readonly string action = "registerSuccess";
-                public string token = "";
-            }
         }
 
         /// <summary>
@@ -91,14 +71,13 @@ namespace Phi_MGUS
             public class ClientMetaData : Message
             {
                 public new readonly string action = "clientMetaData";
-                public string token = "";
 
                 public object data = new
                 {
                     features = new FeatureSupport(), // Compatibility with lower versions of the .NET Framework
                     identifierName = "anonymous", // client name, example: "NRLT_PhiSim Next"
                     clientVersion = -1, // client Version, anonymous example: -1
-                    userName = "anonymous", // client username, anonymous example: "anonymous"
+                    userName = "anonymous", // username, anonymous example: "anonymous"
                     password = "" // if server is private，this field should be filled
                 };
             }
@@ -112,22 +91,6 @@ namespace Phi_MGUS
                 public bool VotingSelection = false;
                 public bool RealTimeLeaderboard = false;
                 public bool RealTimeChat = false;
-            }
-
-            /// <summary>
-            /// Register message | 注册消息
-            /// </summary>
-            public class Register : Message
-            {
-                public new readonly string action = "register";
-                public object data = new
-                {
-                    isAnonymous = true,
-                    userName = "anonymous",
-                    isSpectator = false,
-                    isDebugger = false,
-                    authentication = "" //if Spectator or Debugger，this field should be filled
-                };
             }
         }
     }
