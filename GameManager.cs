@@ -4,6 +4,9 @@ namespace Phi_MGUS;
 
 public static class GameManager
 {
+    /// <summary>
+    /// Room Manager | 房间管理器
+    /// </summary>
     public static class RoomManager
     {
         public static readonly List<Room> roomList = new();
@@ -11,7 +14,7 @@ public static class GameManager
         {
             roomList.Add(new Room(user, config));
         }
-
+        
         public static void RemoveRoom(Room instance)
         {
             for(int i = roomList.Count - 1; i >= 0; i--)
@@ -31,7 +34,13 @@ public static class GameManager
         {
             userList.Add(new User(name, socket, config));
         }
-
+        
+        [Obsolete("Use RemoveUser instead. | 使用 RemoveUser 代替.")]
+        public static void Drop(IWebSocketConnection socket)
+        {
+            RemoveUser(socket);
+        }
+        
         public static void RemoveUser(IWebSocketConnection socket)
         {
             for(int i = userList.Count - 1; i >= 0; i--)
@@ -42,6 +51,12 @@ public static class GameManager
                 }
             }
         }
+        
+        public static bool Contains(IWebSocketConnection socket)
+        {
+            return userList.Any(x => x.userSocket == socket);
+        }
+        
     }
 
     public class Room

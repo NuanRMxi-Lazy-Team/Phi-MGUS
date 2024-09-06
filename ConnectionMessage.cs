@@ -8,7 +8,7 @@
         public class Message
         {
             public string action = "";
-            public string token = "";
+            //public string token = "";
         }
 
         /// <summary>
@@ -72,14 +72,18 @@
             {
                 public new readonly string action = "clientMetaData";
 
-                public object data = new
+                public Data data = new Data();
+
+                public class Data
                 {
-                    features = new FeatureSupport(), // Compatibility with lower versions of the .NET Framework
-                    identifierName = "anonymous", // client name, example: "NRLT_PhiSim Next"
-                    clientVersion = -1, // client Version, anonymous example: -1
-                    userName = "anonymous", // username, anonymous example: "anonymous"
-                    password = "" // if server is private，this field should be filled
-                };
+                    public FeatureSupport features = new FeatureSupport();
+                    public string identifierName = "anonymous";
+                    public int identifierVersion = -1;
+                    public string userName = null; // If it is an anonymous user, this value is null
+                    public string password = null; // if server is private，this value is not null
+                    public bool isDebugger = false;
+                    public bool isSpectator = false;
+                }
             }
 
             /// <summary>
