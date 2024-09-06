@@ -22,7 +22,7 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore
     - name: Build
-      run: dotnet build --no-restore
+      run: dotnet build --no-restore --output ./output
     - name: Test
       run: dotnet test --no-build --verbosity normal
     - name: Output Test Results
@@ -35,6 +35,11 @@ jobs:
       with:
         name: test-results-linux
         path: test-results
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-artifacts-linux
+        path: ./output
 
   build-windows:
     runs-on: windows-latest
@@ -48,7 +53,7 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore
     - name: Build
-      run: dotnet build --no-restore
+      run: dotnet build --no-restore --output ./output
     - name: Test
       run: dotnet test --no-build --verbosity normal
     - name: Output Test Results
@@ -61,3 +66,8 @@ jobs:
       with:
         name: test-results-windows
         path: test-results
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-artifacts-windows
+        path: ./output
