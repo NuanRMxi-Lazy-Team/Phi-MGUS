@@ -38,7 +38,7 @@ public class Program
         }
 
         //Start WebSocket Server | 启动 WebSocket 服务器
-        WebSocketServer wssserver = new WebSocketServer($"ws://{config.wssOptions.Host}:{config.wssOptions.Port}");
+        WebSocketServer wssserver = new WebSocketServer($"wss://{config.wssOptions.Host}:{config.wssOptions.Port}");
         WebSocketServer wsserver = new WebSocketServer($"ws://{config.wsOptions.Host}:{config.wsOptions.Port}");
         //set cert | 设置证书
         if (!string.IsNullOrEmpty(config.certPath) && config.wss)
@@ -119,10 +119,16 @@ public class Program
                 LogManager.LogLevel.Warning
                 );
         }
-
-        // 服务器已启动并同时使用了ws和wss或服务器已启动并只使用了某一个
         
         LogManager.WriteLog("The server has been started");
+        if (config.ws)
+        {
+            LogManager.WriteLog($"The server is listening on ws://{config.wsOptions.Host}:{config.wsOptions.Port}");
+        }
+        if (config.wss)
+        {
+            LogManager.WriteLog($"The server is listening on wss://{config.wssOptions.Host}:{config.wssOptions.Port}");
+        }
         while (true)
         {
             var command = Console.ReadLine();
@@ -133,7 +139,7 @@ public class Program
                 LogManager.WriteLog("User List:");
                 foreach (var user in GameManager.UserManager.userList)
                 {
-                    LogManager.WriteLog($"{user.userName}");
+                    LogManager.WriteLog($"{user.userName} Joined at {user.joinTime.ToString("yyyy-mm-dd hh:mm:ss")}");
                 }
             }
         }
@@ -174,8 +180,7 @@ public class Program
                 return;
             }
 
-            var data = (dynamic)clientMetaData.data;
-            ConnectionMessage.Client.FeatureSupport featSup = data.features;
+            var data = clientMetaData.data;
             if (config.isPrivate)
             {
                 if (string.IsNullOrEmpty(data.password) || data.password != config.Password)
@@ -188,18 +193,46 @@ public class Program
                     //Authentication failed, Drop and disconnect | 认证失败，丢弃并断开连接
                     GameManager.UserManager.Drop(socket);
                     socket.Close();
+                    return;
                 }
             }
-
+            // Add user | 添加用户
             LogManager.WriteLog($"User {clientMetaData.data.userName} connected.");
             LogManager.WriteLog($"Raw Message: {message}", LogManager.LogLevel.Debug);
             GameManager.UserManager.AddUser(clientMetaData.data.userName, socket, new GameManager.User.UserConfig
             {
-                isAnonymous = clientMetaData.data.userName == null,
-                isDebugger = clientMetaData.data.isDebugger,
-                isSpectator = clientMetaData.data.isSpectator
+                isAnonymous = data.userName == null,
+                isDebugger = data.isDebugger,
+                isSpectator = data.isSpectator,
+                featureSupport = data.features
             });
             await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinServerSuccess()));
+            return;
+        }
+        
+        // Check if the user has completed the return of metadata | 检查用户是否已经返回元数据
+        if (!GameManager.UserManager.Contains(socket))
+        {
+            socket.Close();
+            LogManager.WriteLog("illegal client, Drop it.", LogManager.LogLevel.Warning);
+            return;
+        }
+
+        if (msg.action == "newRoom")
+        {
+            // To ConnectionMessage.Client.NewRoom | 将客户端发送的消息转换为 ConnectionMessage.Client.NewRoom
+            ConnectionMessage.Client.NewRoom newRoom = JsonConvert.DeserializeObject<ConnectionMessage.Client.NewRoom>(message)!;
+            // TODO: User creates room logic | 创建房间逻辑
+            var user = GameManager.UserManager.GetUser(socket);
+            if (user.userStatus == GameManager.User.Status.InRoom)
+            {
+                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.AddRoomFailed
+                {
+                    reason = "You are already in a room." // 你已经在房间里了。 
+                }));
+                return;
+            }
+            GameManager.UserManager.GetUser(socket).CreateRoom(newRoom.data.roomID);
         }
     }
 
@@ -256,6 +289,7 @@ public class Program
         };
         public string certPath = "path/to/your/certificate.pfx";
         public string certPassword = "your_certificate_password";
+        public string userDefauletAvatarUrl = "";
     }
 
     /// <summary>

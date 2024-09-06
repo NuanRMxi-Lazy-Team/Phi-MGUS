@@ -1,4 +1,6 @@
-﻿namespace Phi_MGUS
+﻿using System.Text.RegularExpressions;
+
+namespace Phi_MGUS
 {
     public static class ConnectionMessage
     {
@@ -95,6 +97,65 @@
                 public bool VotingSelection = false;
                 public bool RealTimeLeaderboard = false;
                 public bool RealTimeChat = false;
+            }
+            /// <summary>
+            /// New room | 新建房间
+            /// </summary>
+            public class NewRoom : Message
+            {
+                public readonly string action = "newRoom";
+                public Data data = new Data
+                {
+                    //RoomID is a random string, length is 16 | 房间ID是随机字符串，长度为16
+                    roomID = Guid.NewGuid().ToString().Substring(0, 16)
+                };
+                
+                public class Data
+                {
+                    public int maxUser = 8;
+                    private string _roomID;
+                    public string roomID
+                    {
+                        set
+                        {
+                            if (value.Length > 32)
+                            {
+                                throw new ArgumentException("RoomIdentifier cannot exceed 32 digits.");// 不能超过32位
+                            }
+                            if (!Regex.IsMatch(value, @"^[a-zA-Z0-9]+$"))
+                            {
+                                throw new ArgumentException("RoomIdentifier can only use English or numbers.");// 只能使用英文或数字
+                            }
+                            _roomID = value;
+                        }
+                        get
+                        {
+                            return _roomID;
+                        }
+                    }// Only English or numbers can be used, and cannot exceed 32 digits | 只能使用英文或数字，且不超过32位
+                    
+                }
+            }
+            
+            /// <summary>
+            /// Join room | 加入房间
+            /// </summary>
+            public class JoinRoom : Message
+            {
+                public readonly string action = "joinRoom";
+                public Data data = new Data();
+                
+                public class Data
+                {
+                    public string roomID = "";
+                }
+            }
+            /// <summary>
+            /// Leave room | 离开房间
+            /// </summary>
+            public class LeaveRoom : Message
+            {
+                public readonly string action = "leaveRoom";
             }
         }
     }
