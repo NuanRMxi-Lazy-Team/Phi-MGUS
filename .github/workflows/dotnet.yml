@@ -10,8 +10,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
-
+  build-linux:
     runs-on: ubuntu-latest
 
     steps:
@@ -26,3 +25,39 @@ jobs:
       run: dotnet build --no-restore
     - name: Test
       run: dotnet test --no-build --verbosity normal
+    - name: Output Test Results
+      run: |
+        mkdir -p test-results
+        find . -name 'TestResults' -exec cp -r {} test-results/ \;
+      continue-on-error: true
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results-linux
+        path: test-results
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+    - name: Restore dependencies
+      run: dotnet restore
+    - name: Build
+      run: dotnet build --no-restore
+    - name: Test
+      run: dotnet test --no-build --verbosity normal
+    - name: Output Test Results
+      run: |
+        mkdir test-results
+        Get-ChildItem -Recurse -Filter 'TestResults' | ForEach-Object { Copy-Item $_.FullName -Destination test-results -Recurse }
+      continue-on-error: true
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results-windows
+        path: test-results
