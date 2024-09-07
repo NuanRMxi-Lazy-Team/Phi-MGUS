@@ -1,5 +1,5 @@
 ﻿using System.Text.RegularExpressions;
-
+using System;
 namespace Phi_MGUS
 {
     public static class ConnectionMessage
@@ -45,20 +45,50 @@ namespace Phi_MGUS
             }
 
             /// <summary>
-            /// Room add failed message | 房间新建失败消息
+            /// Room new failed message | 房间新建失败消息
             /// </summary>
-            public class AddRoomFailed : Message
+            public class NewRoomFailed : Message
             {
-                public new readonly string action = "addRoomFailed";
+                public new readonly string action = "newRoomFailed";
                 public string reason = "unknown";
             }
 
             /// <summary>
-            /// Room success message | 房间新建成功消息
+            /// Room new success message | 房间新建成功消息
             /// </summary>
-            public class AddRoomSuccess : Message
+            public class NewRoomSuccess : Message
             {
-                public new readonly string action = "addRoomSuccess";
+                public new readonly string action = "newRoomSuccess";
+            }
+            /// <summary>
+            /// Room join failed message | 房间加入成功消息
+            /// </summary>
+            public class JoinRoomFailed : Message
+            {
+                public new readonly string action = "joinRoomFaild";
+                public string reason = "unknown";
+            }
+            /// <summary>
+            /// Room join success message | 房间加入成功消息
+            /// </summary>
+            public class JoinRoomSuccess : Message
+            {
+                public new readonly string action = "joinRoomSuccess";
+            }
+            /// <summary>
+            /// Leave room failed message | 离开房间失败消息
+            /// </summary>
+            public class LeaveRoomFailed : Message
+            {
+                public new readonly string action = "leaveRoomFailed";
+                public string reason = "unknown";
+            }
+            /// <summary>
+            /// Leave room success message | 离开房间成功消息
+            /// </summary>
+            public class LeaveRoomSuccess : Message
+            {
+                public new readonly string action = "leaveRoomSuccess";
             }
         }
 
@@ -107,7 +137,7 @@ namespace Phi_MGUS
                 public Data data = new Data
                 {
                     //RoomID is a random string, length is 16 | 房间ID是随机字符串，长度为16
-                    roomID = Guid.NewGuid().ToString().Substring(0, 16)
+                    roomID = Guid.NewGuid().ToString().Replace("-", "").Substring(0, 16)
                 };
                 
                 public class Data
@@ -135,6 +165,25 @@ namespace Phi_MGUS
                     }// Only English or numbers can be used, and cannot exceed 32 digits | 只能使用英文或数字，且不超过32位
                     
                 }
+                public NewRoom(int? maxUser = 8, string roomID = null)
+                {
+                    if (roomID == null)
+                    {
+                        roomID = Guid.NewGuid().ToString().Replace("-", "").Substring(0, 16);
+                    }
+                    else
+                    {
+                        data.roomID = roomID;
+                    }
+                    if (maxUser == null)
+                    {
+                        maxUser = 8;
+                    }
+                    else
+                    {
+                        data.maxUser = maxUser.Value;
+                    }
+                }
             }
             
             /// <summary>
@@ -148,6 +197,11 @@ namespace Phi_MGUS
                 public class Data
                 {
                     public string roomID = "";
+                }
+
+                public JoinRoom(string roomID)
+                {
+                    data.roomID = roomID;
                 }
             }
             /// <summary>

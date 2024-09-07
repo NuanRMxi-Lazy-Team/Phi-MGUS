@@ -10,21 +10,50 @@ public static class GameManager
     /// </summary>
     public static class RoomManager
     {
-        private static readonly List<Room> roomList = new();
+        public static readonly List<Room> roomList = new();
         public static void AddRoom(User user, string roomID)
         {
             roomList.Add(new Room(user, roomID));
+            user.userStatus = User.Status.InRoom;
         }
         
-        public static void RemoveRoom(Room instance)
+        /// <summary>
+        /// Dissolve the room | 解散房间
+        /// </summary>
+        /// <param name="room">房间</param>
+        public static void RemoveRoom(Room room)
         {
-            for(int i = roomList.Count - 1; i >= 0; i--)
+            for(var i = roomList.Count - 1; i >= 0; i--)
             {
-                if(roomList[i] == instance)
+                if(roomList[i] == room)
                 {
                     roomList.RemoveAt(i);
                 }
             }
+        }
+        /// <summary>
+        /// Remove room by roomID | 根据房间ID删除房间
+        /// </summary>
+        /// <param name="roomID">房间ID</param>
+        public static void RemoveRoom(string roomID)
+        {
+            for(var i = roomList.Count - 1; i >= 0; i--)
+            {
+                if(roomList[i].roomID == roomID)
+                {
+                    roomList.RemoveAt(i);
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Get room by roomID | 根据房间ID获取房间
+        /// </summary>
+        /// <param name="roomID">房间ID</param>
+        /// <returns>Room | 房间</returns>
+        public static Room? GetRoom(string roomID)
+        {
+            return roomList.FirstOrDefault(x => x.roomID == roomID);
         }
     }
 
@@ -48,7 +77,7 @@ public static class GameManager
         /// <summary>
         /// Remove user | 移除用户
         /// </summary>
-        /// <param name="socket"></param>
+        /// <param name="socket">用户对应Socket</param>
         public static void RemoveUser(IWebSocketConnection socket)
         {
             for(int i = userList.Count - 1; i >= 0; i--)
@@ -73,7 +102,6 @@ public static class GameManager
         {
             return userList.First(x => x.userSocket == socket);
         }
-        
     }
 
     /// <summary>
@@ -87,22 +115,24 @@ public static class GameManager
         /// <summary>
         /// Create room | 创建房间
         /// </summary>
-        /// <param name="owner"></param>
-        /// <param name="roomID"></param>
+        /// <param name="owner">房间所有者</param>
+        /// <param name="roomID">房间ID</param>
         /// <exception cref="ArgumentException">Illegal room ID | 非法房间ID</exception>
         public Room(User owner, string roomID)
         {
             if (roomID.Length > 32)
             {
-                throw new ArgumentException("RoomIdentifier cannot exceed 32 digits.");
+                throw new ArgumentException("RoomIdentifier cannot exceed 32 digits."); // 房间ID长度不能超过32位
             }
-            if (!Regex.IsMatch(this.roomID, @"^[a-zA-Z0-9]+$"))
+            if (!Regex.IsMatch(roomID, @"^[a-zA-Z0-9]+$"))
             {
-                throw new ArgumentException("RoomIdentifier can only use pure English or numbers.");
+                throw new ArgumentException("RoomIdentifier can only use English or numbers.");// 房间ID只能使用英文或数字
             }
             this.owner = owner;
+            owner.userRoom = this;
             this.roomID = roomID;
-            userList = new List<User>();
+            userList = new();
+            LogManager.WriteLog($"New room created: {roomID} by {owner.userName}");
         }
         /// <summary>
         /// User join room | 用户加入房间
@@ -111,6 +141,7 @@ public static class GameManager
         public void Join(User user)
         {
             userList.Add(user);
+            user.userRoom = this;
         }
         /// <summary>
         /// User leave room | 用户离开房间
@@ -119,6 +150,11 @@ public static class GameManager
         public void Leave(User user)
         {
             userList.Remove(user);
+            if (userList.Count == 0)
+            {
+                RoomManager.RemoveRoom(this);
+                LogManager.WriteLog($"{roomID} user all left, room removed.");
+            }
         }
         /// <summary>
         /// Broadcast message to room | 广播消息到房间
@@ -145,11 +181,8 @@ public static class GameManager
         /// <param name="index">索引</param>
         public User this[int index]
         {
-            get { return userList[index]; }
-            set
-            {
-                userList[index] = value;
-            }
+            get => userList[index]; 
+            set => userList[index] = value;
         }
     }
     
@@ -213,9 +246,21 @@ public static class GameManager
             userStatus = Status.AFK;
         }
 
+        /// <summary>
+        /// New Room | 创建房间
+        /// </summary>
+        /// <param name="roomID">房间ID</param>
+        /// <exception cref="ArgumentException">房间已存在</exception>
         public void CreateRoom(string roomID)
         {
-            RoomManager.AddRoom(this, roomID);
+            if (RoomManager.GetRoom(roomID) != null)
+            {
+                throw new ArgumentException("RoomID already exists.");
+            }
+            else
+            {
+                RoomManager.AddRoom(this, roomID);
+            }
         }
 
         public void Remove()

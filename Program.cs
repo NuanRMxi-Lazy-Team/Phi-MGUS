@@ -12,10 +12,6 @@ public class Program
         isDebug = true
     };
 
-    //private static GameManager.ClientList clients = new();
-    //private static GameManager.UserList users = new();
-
-
     private static void Main(string[] args)
     {
         //Load config | 读取配置
@@ -47,6 +43,8 @@ public class Program
             {
                 // set cert
                 wssserver.Certificate = new X509Certificate2(config.certPath, config.certPassword);
+                wssserver.EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12 |
+                                                System.Security.Authentication.SslProtocols.Tls13;
             }
             catch (Exception e)
             {
@@ -86,6 +84,7 @@ public class Program
                 };
             });
         }
+
         if (config.ws)
         {
             wsserver.Start(socket =>
@@ -117,18 +116,20 @@ public class Program
             LogManager.WriteLog(
                 "Is it expected that both secure and insecure connections will be enabled simultaneously?",
                 LogManager.LogLevel.Warning
-                );
+            );
         }
-        
+
         LogManager.WriteLog("The server has been started");
         if (config.ws)
         {
             LogManager.WriteLog($"The server is listening on ws://{config.wsOptions.Host}:{config.wsOptions.Port}");
         }
+
         if (config.wss)
         {
             LogManager.WriteLog($"The server is listening on wss://{config.wssOptions.Host}:{config.wssOptions.Port}");
         }
+
         while (true)
         {
             var command = Console.ReadLine();
@@ -140,6 +141,14 @@ public class Program
                 foreach (var user in GameManager.UserManager.userList)
                 {
                     LogManager.WriteLog($"{user.userName} Joined at {user.joinTime.ToString("yyyy-mm-dd hh:mm:ss")}");
+                }
+            }
+            else if (command == "roomlist")
+            {
+                LogManager.WriteLog("Room List:");
+                foreach (var room in GameManager.RoomManager.roomList)
+                {
+                    LogManager.WriteLog($"{room.roomID} Owner: {room.owner.userName}");
                 }
             }
         }
@@ -156,7 +165,8 @@ public class Program
         {
             LogManager.WriteLog("illegal data received, Drop.", LogManager.LogLevel.Warning);
             //Drop | 丢弃并断开连接
-            GameManager.UserManager.RemoveUser(socket);
+            if (GameManager.UserManager.Contains(socket))
+                GameManager.UserManager.RemoveUser(socket);
             socket.Close();
             return;
         }
@@ -171,11 +181,14 @@ public class Program
             {
                 //illegal client, Drop it | 非法客户端，丢弃并断开连接
                 LogManager.WriteLog("illegal client, Drop it.", LogManager.LogLevel.Warning);
-                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinServerFailed()
+                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinServerFailed
                 {
-                    reason = "The client is already connected to the server.\nYour connection will be closed.",
+                    reason =
+                        "The client is already connected to the server.\nYour connection will be closed." //客户端已经连接服务器，您的连接将被关闭。
                 }));
-                GameManager.UserManager.Drop(socket);
+                LogManager.WriteLog(
+                    $"There are illegal clients attempting to pass metadata multiple times: {GameManager.UserManager.GetUser(socket).userName}");
+                GameManager.UserManager.RemoveUser(socket);
                 socket.Close();
                 return;
             }
@@ -185,17 +198,20 @@ public class Program
             {
                 if (string.IsNullOrEmpty(data.password) || data.password != config.Password)
                 {
-                    await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinServerFailed()
+                    await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinServerFailed
                     {
                         reason =
-                            "The server is private, but no password was provided or the password is invalid.\nYour connection will be closed.",
+                            "The server is private, but no password was provided or the password is invalid.\nYour connection will be closed." //服务器是私有的，但没有提供密码或密码无效。您的连接将被关闭。
                     }));
+                    LogManager.WriteLog(
+                        $"The client attempted to connect to the server, but authentication failed: {data.userName}");
                     //Authentication failed, Drop and disconnect | 认证失败，丢弃并断开连接
-                    GameManager.UserManager.Drop(socket);
+                    GameManager.UserManager.RemoveUser(socket);
                     socket.Close();
                     return;
                 }
             }
+
             // Add user | 添加用户
             LogManager.WriteLog($"User {clientMetaData.data.userName} connected.");
             LogManager.WriteLog($"Raw Message: {message}", LogManager.LogLevel.Debug);
@@ -209,7 +225,7 @@ public class Program
             await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinServerSuccess()));
             return;
         }
-        
+
         // Check if the user has completed the return of metadata | 检查用户是否已经返回元数据
         if (!GameManager.UserManager.Contains(socket))
         {
@@ -221,26 +237,99 @@ public class Program
         if (msg.action == "newRoom")
         {
             // To ConnectionMessage.Client.NewRoom | 将客户端发送的消息转换为 ConnectionMessage.Client.NewRoom
-            ConnectionMessage.Client.NewRoom newRoom = JsonConvert.DeserializeObject<ConnectionMessage.Client.NewRoom>(message)!;
+            ConnectionMessage.Client.NewRoom newRoom =
+                JsonConvert.DeserializeObject<ConnectionMessage.Client.NewRoom>(message)!;
             // TODO: User creates room logic | 创建房间逻辑
             var user = GameManager.UserManager.GetUser(socket);
             if (user.userStatus == GameManager.User.Status.InRoom)
             {
-                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.AddRoomFailed
+                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.NewRoomFailed
                 {
                     reason = "You are already in a room." // 你已经在房间里了。 
                 }));
+                LogManager.WriteLog($"User {user.userName} tried to create a room while in a room."); // 用户尝试在房间里创建房间。
                 return;
             }
+
+            var room = GameManager.RoomManager.GetRoom(newRoom.data.roomID);
+            if (room != null)
+            {
+                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.NewRoomFailed
+                {
+                    reason = "The room already exists." // 房间已存在。
+                }));
+                LogManager.WriteLog(
+                    $"User {user.userName} tried to create a room with the same name."); // 用户尝试使用相同的名称创建房间。
+                return;
+            }
+
             GameManager.UserManager.GetUser(socket).CreateRoom(newRoom.data.roomID);
+            await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.NewRoomSuccess()));
+            LogManager.WriteLog($"User {user.userName} has created a new room {user.userRoom!.roomID}.");
+        }
+
+        if (msg.action == "joinRoom")
+        {
+            // To ConnectionMessage.Client.JoinRoom | 将客户端发送的消息转换为 ConnectionMessage.Client.JoinRoom
+            ConnectionMessage.Client.JoinRoom joinRoom =
+                JsonConvert.DeserializeObject<ConnectionMessage.Client.JoinRoom>(message)!;
+            var user = GameManager.UserManager.GetUser(socket);
+            if (user.userStatus == GameManager.User.Status.InRoom)
+            {
+                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinRoomFailed
+                {
+                    reason = "You are already in a room." // 你已经在房间里了。 
+                }));
+                LogManager.WriteLog($"User {user.userName} tried to join a room while in a room."); // 用户尝试在房间里加入房间。
+                return;
+            }
+
+            //Find the room | 查找房间
+            var room = GameManager.RoomManager.GetRoom(joinRoom.data.roomID);
+            if (room != null)
+            {
+                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinRoomFailed
+                {
+                    reason = "You are already in a room." // 你已经在房间里了。
+                }));
+                LogManager.WriteLog($"User {user.userName} tried to join a room while in a room."); // 用户尝试在房间里加入房间。
+            }
+            else
+            {
+                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinRoomFailed
+                {
+                    reason = "The room does not exist." // 房间不存在。
+                }));
+                LogManager.WriteLog($"User {user.userName} tried to join a room that does not exist.");// 用户尝试加入不存在的房间。
+            }
+        }
+
+        if (msg.action == "leaveRoom")
+        {
+            var user = GameManager.UserManager.GetUser(socket);
+            if (user.userStatus == GameManager.User.Status.InRoom)
+            {
+                user.LeaveRoom();
+                LogManager.WriteLog($"User {user.userName} has left the {user.userRoom!.roomID} room.");
+                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.LeaveRoomSuccess()));
+            }
+            else
+            {
+                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.LeaveRoomFailed
+                {
+                    reason = "You are not in a room." // 你不在房间里。
+                }));
+                LogManager.WriteLog($"User {user.userName} tried to leave a room while not in a room.");// 用户尝试离开房间，但未在房间里。
+            }
         }
     }
 
     private static async Task ServerOnOpen(IWebSocketConnection socket)
     {
+        // Send GetData message, get metadata. | 发送 GetData 消息，获取元数据
         await socket.Send(
             JsonConvert.SerializeObject(
-                new ConnectionMessage.Server.GetData()
+                new ConnectionMessage.Server.GetData
                 {
                     needPassword = config.isPrivate
                 }
@@ -251,18 +340,19 @@ public class Program
     private static async Task ServerOnError(Exception e, IWebSocketConnection socket)
     {
         LogManager.WriteLog(e.Message, LogManager.LogLevel.Debug);
-        //WriteLog | 输出日志
-        LogManager.WriteLog("Socket has been drop, because of an error: " + e.Message, LogManager.LogLevel.Error);
-
+        //WriteLog, Socket has been drop | 输出日志，连接被丢弃
+        LogManager.WriteLog("Socket has been drop, because of an error: " + e.Message, LogManager.LogLevel.Debug);
+        LogManager.WriteLog($"User {GameManager.UserManager.GetUser(socket).userName} unexpectedly disconnected",
+            LogManager.LogLevel.Warning);
 
         //Drop and disconnect | 丢弃并断开连接
-        GameManager.UserManager.Drop(socket);
+        GameManager.UserManager.RemoveUser(socket);
         socket.Close();
     }
-    
+
     private static async Task ServerOnClose(IWebSocketConnection socket)
     {
-        LogManager.WriteLog("Client disconnected.");
+        LogManager.WriteLog($"user{GameManager.UserManager.GetUser(socket).userName} disconnected.");
         GameManager.UserManager.RemoveUser(socket);
     }
 
@@ -277,16 +367,19 @@ public class Program
         public string Password = "";
         public bool ws = true;
         public bool wss = false;
+
         public dynamic wsOptions = new
         {
             Host = "0.0.0.0",
             Port = 14156
         };
+
         public dynamic wssOptions = new
         {
             Host = "0.0.0.0",
             Port = 14157
         };
+
         public string certPath = "path/to/your/certificate.pfx";
         public string certPassword = "your_certificate_password";
         public string userDefauletAvatarUrl = "";
