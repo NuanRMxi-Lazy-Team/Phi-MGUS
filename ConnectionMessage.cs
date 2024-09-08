@@ -37,8 +37,8 @@ namespace Phi_MGUS
 
                 public enum ReasonType
                 {
-                    AuthFailedByPwdIncorrect,// Will be kicked out
-                    AuthFailedByPwdNull, // Will be kicked out
+                    AuthFailedByPwdIncorrect,// Will be kicked out | 会被踢出服务器
+                    AuthFailedByPwdNull, // Will be kicked out | 会被踢出服务器
                     JoinFailedByIllegalClient,
                     JoinFailedByInvalidParameter,
                     Unknown
@@ -119,6 +119,28 @@ namespace Phi_MGUS
             {
                 public new readonly string action = "leaveRoomSuccess";
             }
+            /// <summary>
+            /// New user join room message | 新用户加入房间消息
+            /// </summary>
+            public class NewUserJoinRoom : Message
+            {
+                public readonly string action = "newUserJoinRoom";
+                public Data data = new Data();
+                public class Data
+                {
+                    public string userName = null;
+                    public bool isSpectator = false;
+                    public string avatarUrl = "";
+                    public string roomID = "";
+                }
+                public NewUserJoinRoom(string userName, bool isSpectator, string avatarUrl, string roomID)
+                {
+                    data.userName = userName;
+                    data.isSpectator = isSpectator;
+                    data.avatarUrl = avatarUrl;
+                    data.roomID = roomID;
+                }
+            }
         }
 
         /// <summary>
@@ -138,8 +160,8 @@ namespace Phi_MGUS
                 public class Data
                 {
                     public FeatureSupport features = new FeatureSupport();
-                    public string identifierName = "anonymous";
-                    public int identifierVersion = -1;
+                    public string clientName = "anonymous";
+                    public int clientVersion = -1;
                     public string userName = null; // If it is an anonymous user, this value is null
                     public string password = null; // if server is private，this value is not null
                     public bool isDebugger = false;

@@ -11,13 +11,20 @@ public class Program
     {
         isDebug = true
     };
+    
+    private const string Version = "Dev 0.0.0";
 
     private static void Main(string[] args)
     {
+        LogManager.WriteLog("Phi-MGUS " + Version + " | " + "Starting...");
         //Load config | 读取配置
         if (File.Exists("config.json"))
         {
             config = JsonConvert.DeserializeObject<Config>(File.ReadAllText("config.json"))!;
+            if (config.isDebug)
+            {
+                LogManager.WriteLog("Debug mode is enabled.", LogManager.LogLevel.Warning);
+            }
         }
         else
         {
@@ -133,28 +140,63 @@ public class Program
         while (true)
         {
             var command = Console.ReadLine();
+            var commands = command.Split(' ');
 
-            if (command == "userlist")
+            try
             {
-                //print all user
-                LogManager.WriteLog("User List:");
-                foreach (var user in GameManager.UserManager.userList)
+                if (commands[0] == "user")
                 {
-                    LogManager.WriteLog(
-                        $"{user.name} Joined at {user.joinTime.ToString("yyyy-mm-dd hh:mm:ss")} {user.room?.roomID ?? "No Room"}");
+                    if (commands[1] == "list")
+                    {
+                        //print all user | 输出所有用户
+                        LogManager.WriteLog("User List:");
+                        foreach (var user in GameManager.UserManager.UserList)
+                        {
+                            LogManager.WriteLog(
+                                $"{user.name} Joined at {user.joinTime.ToString("yyyy-mm-dd hh:mm:ss")} {user.room?.roomID ?? "No Room"}");
+                        }
+                    }
+                }
+
+                if (commands[0] == "room")
+                {
+                    if (commands[1] == "list")
+                    {
+                        LogManager.WriteLog("Room List:");
+                        foreach (var room in GameManager.RoomManager.RoomList)
+                        {
+                            LogManager.WriteLog($"{room.roomID} Owner: {room.owner.name} User Count: {room.UserCount}");
+                        }
+                    }
+                    else if (GameManager.RoomManager.GetRoom(commands[1]) != null)
+                    {
+                        //print room info | 输出房间信息
+                        var room = GameManager.RoomManager.GetRoom(commands[1]);
+                        LogManager.WriteLog($"Room Info: {room.roomID} Owner: {room.owner.name} User Count: {room.UserCount}");
+                        LogManager.WriteLog("Member:");
+                        for (int i = 0; i < room.UserCount; i++)
+                        {
+                            LogManager.WriteLog(
+                                "Name: " + room[i].name + (room.owner == room[i] ? " (Owner)" : ""));
+                        }
+                    }
                 }
             }
-            else if (command == "roomlist")
+            catch
             {
-                LogManager.WriteLog("Room List:");
-                foreach (var room in GameManager.RoomManager.roomList)
-                {
-                    LogManager.WriteLog($"{room.roomID} Owner: {room.owner.name}");
-                }
+                LogManager.WriteLog("Invalid command, please check the command again.", LogManager.LogLevel.Warning);
             }
+            //catch
+            //{ }
+            
         }
     }
 
+    /// <summary>
+    /// Server On Message | 服务器收到消息
+    /// </summary>
+    /// <param name="message"></param>
+    /// <param name="socket"></param>
     private static async Task ServerOnMessage(string message, IWebSocketConnection socket)
     {
         //Attempt serialization, if serialization fails, discard directly | 序列化失败直接丢弃
@@ -231,8 +273,7 @@ public class Program
             LogManager.WriteLog($"User {clientMetaData.data.userName} connected.");
             LogManager.WriteLog($"Raw Message: {message}", LogManager.LogLevel.Debug);
             //Check all parameters | 检查所有参数
-            if (string.IsNullOrEmpty(clientMetaData.data.userName) || data.isDebugger == null ||
-                data.isSpectator == null || data.features == null)
+            if (data.isDebugger == null || data.isSpectator == null || data.features == null)
             {
                 await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinServerFailed
                 {
@@ -268,7 +309,7 @@ public class Program
                 JsonConvert.DeserializeObject<ConnectionMessage.Client.NewRoom>(message)!;
             // TODO: User creates room logic | 创建房间逻辑
             var user = GameManager.UserManager.GetUser(socket);
-            if (user.userStatus == GameManager.User.Status.InRoom)
+            if (user.status == GameManager.User.Status.InRoom)
             {
                 await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.NewRoomFailed
                 {
@@ -302,7 +343,7 @@ public class Program
             ConnectionMessage.Client.JoinRoom joinRoom =
                 JsonConvert.DeserializeObject<ConnectionMessage.Client.JoinRoom>(message)!;
             var user = GameManager.UserManager.GetUser(socket);
-            if (user.userStatus == GameManager.User.Status.InRoom)
+            if (user.status == GameManager.User.Status.InRoom)
             {
                 await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinRoomFailed
                 {
@@ -329,14 +370,12 @@ public class Program
                 LogManager.WriteLog($"User {user.name} tried to join a room that does not exist."); // 用户尝试加入不存在的房间。
                 return;
             }
-            
-            
         }
 
         if (msg.action == "leaveRoom")
         {
             var user = GameManager.UserManager.GetUser(socket);
-            if (user.userStatus == GameManager.User.Status.InRoom)
+            if (user.status == GameManager.User.Status.InRoom)
             {
                 user.room!.Leave(user);
                 LogManager.WriteLog($"User {user.name} has left the {user.room!.roomID} room.");
@@ -421,7 +460,7 @@ public class Program
     public static void Broadcast(string message)
     {
         //Broadcast message to all clients
-        foreach (var user in GameManager.UserManager.userList)
+        foreach (var user in GameManager.UserManager.UserList)
         {
             user.userSocket.Send(message);
         }
