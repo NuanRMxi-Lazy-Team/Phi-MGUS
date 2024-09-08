@@ -84,9 +84,9 @@ public static class GameManager
             {
                 if(userList[i].userSocket == socket)
                 {
-                    if (userList[i].userRoom != null)
+                    if (userList[i].room != null)
                     {
-                        userList[i].userRoom!.Leave(userList[i]);
+                        userList[i].room!.Leave(userList[i]);
                     }
                     userList.RemoveAt(i);
                 }
@@ -129,10 +129,10 @@ public static class GameManager
                 throw new ArgumentException("RoomIdentifier can only use English or numbers.");// 房间ID只能使用英文或数字
             }
             this.owner = owner;
-            owner.userRoom = this;
+            owner.room = this;
             this.roomID = roomID;
             userList = new();
-            LogManager.WriteLog($"New room created: {roomID} by {owner.userName}");
+            LogManager.WriteLog($"New room created: {roomID} by {owner.name}");
         }
         /// <summary>
         /// User join room | 用户加入房间
@@ -141,7 +141,7 @@ public static class GameManager
         public void Join(User user)
         {
             userList.Add(user);
-            user.userRoom = this;
+            user.room = this;
         }
         /// <summary>
         /// User leave room | 用户离开房间
@@ -193,9 +193,8 @@ public static class GameManager
     {
         public enum Status
         {
-            Disconnect = 0,
-            AFK = 1,
-            InRoom = 2
+            AFK,
+            InRoom 
         }
 
         /// <summary>
@@ -211,9 +210,9 @@ public static class GameManager
 
         public Status userStatus = Status.AFK;
         public UserConfig? userConfig;
-        public string userName;
+        public string name;
         public IWebSocketConnection userSocket;
-        public Room? userRoom;
+        public Room? room;
         public DateTime joinTime = DateTime.Now;
         public string avatarUrl = Program.config.userDefauletAvatarUrl;
         
@@ -222,29 +221,17 @@ public static class GameManager
         {
             if(name == null)
             {
-                userName = "anonymous";
+                this.name = "anonymous";
             }
             else
             {
-                userName = name;
+                this.name = name;
             }
             userSocket = socket;
             userConfig = config;
         }
 
-        public void JoinRoom(Room room)
-        {
-            room.Join(this);
-            userRoom = room;
-            userStatus = Status.InRoom;
-        }
-
-        public void LeaveRoom()
-        {
-            userRoom!.Leave(this);
-            userRoom = null;
-            userStatus = Status.AFK;
-        }
+        
 
         /// <summary>
         /// New Room | 创建房间
@@ -262,28 +249,24 @@ public static class GameManager
                 RoomManager.AddRoom(this, roomID);
             }
         }
-
-        public void Remove()
-        {
-            Disconnect();
-        }
+        
         /// <summary>
         /// User disconnect | 用户断开连接
         /// </summary>
         public void Disconnect()
         {
             UserManager.RemoveUser(userSocket);
-            if (userRoom != null)
+            if (room != null)
             {
-                if (userRoom.owner == this)
+                if (room.owner == this)
                 {
-                    if (userRoom.Count == 0)
+                    if (room.Count == 0)
                     {
-                        RoomManager.RemoveRoom(userRoom);// Remove room | 移除房间
+                        RoomManager.RemoveRoom(room);// Remove room | 移除房间
                     }
                     else
                     {
-                        userRoom.owner = userRoom[0];
+                        room.owner = room[0];
                     }
                 }
             }

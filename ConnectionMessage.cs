@@ -33,7 +33,16 @@ namespace Phi_MGUS
             public class JoinServerFailed : Message
             {
                 public new readonly string action = "joinServerFailed";
-                public string reason = "unknown";
+                public ReasonType reason = ReasonType.Unknown;
+
+                public enum ReasonType
+                {
+                    AuthFailedByPwdIncorrect,// Will be kicked out
+                    AuthFailedByPwdNull, // Will be kicked out
+                    JoinFailedByIllegalClient,
+                    JoinFailedByInvalidParameter,
+                    Unknown
+                }
             }
 
             /// <summary>
@@ -50,7 +59,15 @@ namespace Phi_MGUS
             public class NewRoomFailed : Message
             {
                 public new readonly string action = "newRoomFailed";
-                public string reason = "unknown";
+                public ReasonType reason = ReasonType.Unknown;
+                public enum ReasonType
+                {
+                    RoomAlreadyExists,
+                    RoomIdentifierInvalid,
+                    RoomIdentifierTooLong,
+                    AlreadyInRoom,
+                    Unknown
+                }
             }
 
             /// <summary>
@@ -65,8 +82,15 @@ namespace Phi_MGUS
             /// </summary>
             public class JoinRoomFailed : Message
             {
-                public new readonly string action = "joinRoomFaild";
-                public string reason = "unknown";
+                public new readonly string action = "joinRoomFailed";
+                public ReasonType reason = ReasonType.Unknown;
+                public enum ReasonType
+                {
+                    RoomNotFound,
+                    RoomIsFull,
+                    AlreadyInRoom,
+                    Unknown
+                }
             }
             /// <summary>
             /// Room join success message | 房间加入成功消息
@@ -81,7 +105,12 @@ namespace Phi_MGUS
             public class LeaveRoomFailed : Message
             {
                 public new readonly string action = "leaveRoomFailed";
-                public string reason = "unknown";
+                public ReasonType reason = ReasonType.Unknown;
+                public enum ReasonType
+                {
+                    NotInRoom,
+                    Unknown
+                }
             }
             /// <summary>
             /// Leave room success message | 离开房间成功消息
