@@ -120,9 +120,9 @@ namespace Phi_MGUS
                 public new readonly string action = "leaveRoomSuccess";
             }
             /// <summary>
-            /// New user join room message | 新用户加入房间消息
+            /// User join room message | 新用户加入房间消息
             /// </summary>
-            public class NewUserJoinRoom : Message
+            public class UserJoinRoom : Message
             {
                 public readonly string action = "newUserJoinRoom";
                 public Data data = new Data();
@@ -133,7 +133,7 @@ namespace Phi_MGUS
                     public string avatarUrl = "";
                     public string roomID = "";
                 }
-                public NewUserJoinRoom(string userName, bool isSpectator, string avatarUrl, string roomID)
+                public UserJoinRoom(string userName, bool isSpectator, string avatarUrl, string roomID)
                 {
                     data.userName = userName;
                     data.isSpectator = isSpectator;
@@ -141,6 +141,27 @@ namespace Phi_MGUS
                     data.roomID = roomID;
                 }
             }
+            
+            /// <summary>
+            /// User leave room message | 用户离开房间消息
+            /// </summary>
+            public class UserLeaveRoom : Message
+            {
+                public new readonly string action = "userLeaveRoom";
+                public Data data = new Data();
+                public class Data
+                {
+                    public string userName = "";
+                    public string roomID = "";
+                }
+                public UserLeaveRoom(string userName, string roomID)
+                {
+                    data.userName = userName;
+                    data.roomID = roomID;
+                }
+            }
+            
+            
         }
 
         /// <summary>

@@ -126,7 +126,7 @@ public class Program
             );
         }
 
-        LogManager.WriteLog("The server has been started");
+        //LogManager.WriteLog("The server has been started");
         if (config.ws)
         {
             LogManager.WriteLog($"The server is listening on ws://{config.wsOptions.Host}:{config.wsOptions.Port}");
@@ -186,9 +186,6 @@ public class Program
             {
                 LogManager.WriteLog("Invalid command, please check the command again.", LogManager.LogLevel.Warning);
             }
-            //catch
-            //{ }
-            
         }
     }
 
@@ -307,7 +304,6 @@ public class Program
             // To ConnectionMessage.Client.NewRoom | 将客户端发送的消息转换为 ConnectionMessage.Client.NewRoom
             ConnectionMessage.Client.NewRoom newRoom =
                 JsonConvert.DeserializeObject<ConnectionMessage.Client.NewRoom>(message)!;
-            // TODO: User creates room logic | 创建房间逻辑
             var user = GameManager.UserManager.GetUser(socket);
             if (user.status == GameManager.User.Status.InRoom)
             {

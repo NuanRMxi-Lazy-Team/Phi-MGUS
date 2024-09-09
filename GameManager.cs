@@ -16,7 +16,7 @@ public static class GameManager
         public static void AddRoom(User user, string roomID)
         {
             RoomList.Add(new Room(user, roomID));
-            
+
             user.status = User.Status.InRoom;
         }
 
@@ -73,30 +73,18 @@ public static class GameManager
             UserList.Add(new User(name, socket, config));
         }
 
-        [Obsolete("Use RemoveUser instead. | 使用 RemoveUser 代替.")]
-        public static void Drop(IWebSocketConnection socket)
-        {
-            RemoveUser(socket);
-        }
-
         /// <summary>
         /// Remove user | 移除用户
         /// </summary>
         /// <param name="socket">用户对应Socket</param>
         public static void RemoveUser(IWebSocketConnection socket)
         {
-            for (int i = UserList.Count - 1; i >= 0; i--)
+            var user = GetUser(socket);
+            if (user.room != null)
             {
-                if (UserList[i].userSocket == socket)
-                {
-                    if (UserList[i].room != null)
-                    {
-                        UserList[i].room!.Leave(UserList[i]);
-                    }
-
-                    UserList.RemoveAt(i);
-                }
+                user.room!.Leave(user);
             }
+            UserList.Remove(user);
         }
 
         public static bool Contains(IWebSocketConnection socket)
@@ -153,14 +141,14 @@ public static class GameManager
         {
             userList.Add(user);
             user.room = this;
+            user.status = User.Status.InRoom;
             Broadcast(JsonConvert.SerializeObject(
-                new ConnectionMessage.Server.NewUserJoinRoom(
+                new ConnectionMessage.Server.UserJoinRoom(
                     user.name,
                     user.userConfig!.isSpectator,
                     user.avatarUrl,
                     roomID
-                    )),user);
-            
+                )), user);
         }
 
         /// <summary>
@@ -175,13 +163,21 @@ public static class GameManager
                 RoomManager.RemoveRoom(this);
                 LogManager.WriteLog($"{roomID} user all left, room removed.");
             }
+            else
+            {
+                Broadcast(JsonConvert.SerializeObject(
+                    new ConnectionMessage.Server.UserLeaveRoom(
+                        user.name,
+                        roomID
+                    )), user);
+            }
         }
 
         /// <summary>
         /// Broadcast message to room | 广播消息到房间
         /// </summary>
         /// <param name="message">被广播信息</param>
-        public void Broadcast(string message, User? exceptUser = null)
+        private void Broadcast(string message, User? exceptUser = null)
         {
             foreach (var user in userList)
             {
