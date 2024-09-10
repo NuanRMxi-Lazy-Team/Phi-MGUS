@@ -83,6 +83,7 @@ public static class GameManager
             {
                 user.room!.Leave(user);
             }
+
             UserList.Remove(user);
             socket.Close();
         }
@@ -103,28 +104,43 @@ public static class GameManager
     /// </summary>
     public class Room
     {
-        private List<User> userList;
+        public List<User> userList;
         public User owner;
-        public int maxUser = 8;
+        public int maxUser;
         public string roomID;
-        private string? _chartMD5;
-        public string? chartMD5
+
+        public class ChartInfo
         {
-            get => _chartMD5;
+            public string? MD5;
+            public string? url;
+
+            public ChartInfo(string MD5, string url)
+            {
+                this.MD5 = MD5;
+                this.url = url;
+            }
+        }
+
+        private ChartInfo? _chartInfo;
+
+        public ChartInfo? chartInfo
+        {
+            get => _chartInfo;
             set
             {
-                Broadcast(new ConnectionMessage.Server.UserSelectedChart(value).Serialize());   
-                _chartMD5 = value;
+                Broadcast(new ConnectionMessage.Server.UserSelectedChart(value!.MD5!, value.url!).Serialize());
+                _chartInfo = value;
             }
-        }//chart md5 | 谱面MD5
+        }
 
         /// <summary>
         /// Create room | 创建房间
         /// </summary>
         /// <param name="owner">房间的所有者</param>
         /// <param name="roomID">房间ID</param>
+        /// <param name="maxUser">最大用户数量</param>
         /// <exception cref="ArgumentException">Illegal room ID | 非法房间ID</exception>
-        public Room(User owner, string roomID,int maxUser)
+        public Room(User owner, string roomID, int maxUser)
         {
             if (roomID.Length > 32)
             {
@@ -135,6 +151,7 @@ public static class GameManager
             {
                 throw new ArgumentException("RoomIdentifier can only use English or numbers."); // 房间ID只能使用英文或数字
             }
+
             this.owner = owner;
             owner.room = this;
             this.roomID = roomID;
@@ -152,13 +169,12 @@ public static class GameManager
             userList.Add(user);
             user.room = this;
             user.status = User.Status.InRoom;
-            Broadcast(JsonConvert.SerializeObject(
+            Broadcast(
                 new ConnectionMessage.Server.UserJoinRoom(
                     user.name,
                     user.userConfig!.isSpectator,
-                    user.avatarUrl,
-                    roomID
-                )), user);
+                    user.avatarUrl
+                ).Serialize(), user);
         }
 
         /// <summary>
@@ -214,6 +230,15 @@ public static class GameManager
             get => userList[index];
             set => userList[index] = value;
         }
+
+        public void GameStart()
+        {
+            if (_chartInfo != null)
+            {
+                Broadcast(new ConnectionMessage.Server.GameStart(_chartInfo.MD5, _chartInfo.url,
+                    DateTime.Now.AddSeconds(5)).Serialize());
+            }
+        }
     }
 
     /// <summary>
@@ -249,15 +274,7 @@ public static class GameManager
 
         public User(string name, IWebSocketConnection socket, UserConfig config)
         {
-            if (string.IsNullOrEmpty(name))
-            {
-                this.name = "anonymous";
-            }
-            else
-            {
-                this.name = name;
-            }
-
+            this.name = string.IsNullOrEmpty(name) ? "anonymous" : this.name = name;
             userSocket = socket;
             userConfig = config;
         }

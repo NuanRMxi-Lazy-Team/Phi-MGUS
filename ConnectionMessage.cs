@@ -106,6 +106,15 @@ namespace Phi_MGUS
             public class JoinRoomSuccess : Message
             {
                 public new readonly string action = "joinRoomSuccess";
+                public Data data = new Data();
+                public class Data
+                {
+                    public string roomID = "";
+                    public string roomOwner = "";
+                    public string chartMD5 = "";// If no chart is selected, it is empty | 如果没有选择谱面，则为空
+                    public string chartUrl = "";// If no chart is selected, it is empty | 如果没有选择谱面，则为空
+                    public List<string> userList = new List<string>();
+                }
             }
             /// <summary>
             /// Leave room failed message | 离开房间失败消息
@@ -139,14 +148,12 @@ namespace Phi_MGUS
                     public string userName = null;
                     public bool isSpectator = false;
                     public string avatarUrl = "";
-                    public string roomID = "";
                 }
-                public UserJoinRoom(string userName, bool isSpectator, string avatarUrl, string roomID)
+                public UserJoinRoom(string userName, bool isSpectator, string avatarUrl)
                 {
                     data.userName = userName;
                     data.isSpectator = isSpectator;
                     data.avatarUrl = avatarUrl;
-                    data.roomID = roomID;
                 }
             }
             
@@ -168,6 +175,10 @@ namespace Phi_MGUS
                     data.roomID = roomID;
                 }
             }
+            
+            /// <summary>
+            /// User selected chart message | 用户选择谱面消息
+            /// </summary>
             public class UserSelectedChart : Message
             {
                 public new readonly string action = "userSelectedChart";
@@ -177,12 +188,15 @@ namespace Phi_MGUS
                     public string chartMD5 = "";
                     public string chartUrl = "";
                 }
-                public UserSelectedChart(string chartMD5, string chartUrl = "")
+                public UserSelectedChart(string chartMD5, string chartUrl)
                 {
                     data.chartMD5 = chartMD5;
                     data.chartUrl = chartUrl;
                 }
             }
+            /// <summary>
+            /// Select chart failed message | 选择谱面失败消息
+            /// </summary>
             public class SelectChartFailed : Message
             {
                 public new readonly string action = "selectChartFailed";
@@ -193,8 +207,34 @@ namespace Phi_MGUS
                     NotInRoom,
                     Unknown
                 }
-                
             }
+            
+            /// <summary>
+            /// Game start message | 游戏开始消息
+            /// </summary>
+            public class GameStart : Message
+            {
+                public new readonly string action = "gameStart";
+                public Data data = new Data();
+                public class Data
+                {
+                    public string chartMD5 = "";
+                    public string chartUrl = "";
+                    private DateTime _startDate;
+                    public double startDate
+                    {
+                        get => (_startDate - new DateTime(1970, 1, 1)).TotalMilliseconds;
+                        set => _startDate = new DateTime(1970, 1, 1).AddMilliseconds(value);
+                    }
+                }
+                public GameStart(string chartMD5, string chartUrl, DateTime startDate)
+                {
+                    data.chartMD5 = chartMD5;
+                    data.chartUrl = chartUrl;
+                    data.startDate = (startDate - new DateTime(1970, 1, 1)).TotalMilliseconds;
+                }
+            }
+
         }
 
         /// <summary>
@@ -326,6 +366,11 @@ namespace Phi_MGUS
                     public string chartMD5 = "";
                     public string chartUrl = "";
                 }
+            }
+            
+            public class GameStart : Message
+            {
+                public readonly string action = "gameStart";
             }
         }
     }
