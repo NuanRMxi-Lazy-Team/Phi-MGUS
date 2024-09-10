@@ -1,5 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 using System;
+using Newtonsoft.Json;
 namespace Phi_MGUS
 {
     public static class ConnectionMessage
@@ -11,6 +12,14 @@ namespace Phi_MGUS
         {
             public string action = "";
             //public string token = "";
+            /// <summary>
+            /// Deserialize message | 反序列化消息
+            /// </summary>
+            /// <returns>Json字符串</returns>
+            public string Serialize()
+            {
+                return JsonConvert.SerializeObject(this);
+            }
         }
 
         /// <summary>
@@ -64,7 +73,6 @@ namespace Phi_MGUS
                 {
                     RoomAlreadyExists,
                     RoomIdentifierInvalid,
-                    RoomIdentifierTooLong,
                     AlreadyInRoom,
                     Unknown
                 }
@@ -160,8 +168,33 @@ namespace Phi_MGUS
                     data.roomID = roomID;
                 }
             }
-            
-            
+            public class UserSelectedChart : Message
+            {
+                public new readonly string action = "userSelectedChart";
+                public Data data = new Data();
+                public class Data
+                {
+                    public string chartMD5 = "";
+                    public string chartUrl = "";
+                }
+                public UserSelectedChart(string chartMD5, string chartUrl = "")
+                {
+                    data.chartMD5 = chartMD5;
+                    data.chartUrl = chartUrl;
+                }
+            }
+            public class SelectChartFailed : Message
+            {
+                public new readonly string action = "selectChartFailed";
+                public ReasonType reason = ReasonType.Unknown;
+                public enum ReasonType
+                {
+                    InsufficientPermissions,
+                    NotInRoom,
+                    Unknown
+                }
+                
+            }
         }
 
         /// <summary>
@@ -282,6 +315,17 @@ namespace Phi_MGUS
             public class LeaveRoom : Message
             {
                 public readonly string action = "leaveRoom";
+            }
+            
+            public class SelectChart : Message
+            {
+                public readonly string action = "selectChart";
+                public Data data = new Data();
+                public class Data
+                {
+                    public string chartMD5 = "";
+                    public string chartUrl = "";
+                }
             }
         }
     }

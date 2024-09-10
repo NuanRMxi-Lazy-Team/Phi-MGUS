@@ -13,11 +13,10 @@ public static class GameManager
     {
         public static readonly List<Room> RoomList = new();
 
-        public static void AddRoom(User user, string roomID)
+        public static void AddRoom(User owner, string roomID, int maxUser)
         {
-            RoomList.Add(new Room(user, roomID));
-
-            user.status = User.Status.InRoom;
+            RoomList.Add(new Room(owner, roomID, maxUser));
+            owner.status = User.Status.InRoom;
         }
 
         /// <summary>
@@ -85,6 +84,7 @@ public static class GameManager
                 user.room!.Leave(user);
             }
             UserList.Remove(user);
+            socket.Close();
         }
 
         public static bool Contains(IWebSocketConnection socket)
@@ -105,15 +105,26 @@ public static class GameManager
     {
         private List<User> userList;
         public User owner;
+        public int maxUser = 8;
         public string roomID;
+        private string? _chartMD5;
+        public string? chartMD5
+        {
+            get => _chartMD5;
+            set
+            {
+                Broadcast(new ConnectionMessage.Server.UserSelectedChart(value).Serialize());   
+                _chartMD5 = value;
+            }
+        }//chart md5 | 谱面MD5
 
         /// <summary>
         /// Create room | 创建房间
         /// </summary>
-        /// <param name="owner">房间所有者</param>
+        /// <param name="owner">房间的所有者</param>
         /// <param name="roomID">房间ID</param>
         /// <exception cref="ArgumentException">Illegal room ID | 非法房间ID</exception>
-        public Room(User owner, string roomID)
+        public Room(User owner, string roomID,int maxUser)
         {
             if (roomID.Length > 32)
             {
@@ -124,13 +135,12 @@ public static class GameManager
             {
                 throw new ArgumentException("RoomIdentifier can only use English or numbers."); // 房间ID只能使用英文或数字
             }
-
             this.owner = owner;
             owner.room = this;
             this.roomID = roomID;
             userList = new();
             userList.Add(owner);
-            LogManager.WriteLog($"New room created: {roomID} by {owner.name}");
+            this.maxUser = maxUser;
         }
 
         /// <summary>
@@ -165,11 +175,11 @@ public static class GameManager
             }
             else
             {
-                Broadcast(JsonConvert.SerializeObject(
+                Broadcast(
                     new ConnectionMessage.Server.UserLeaveRoom(
                         user.name,
                         roomID
-                    )), user);
+                    ).Serialize(), user);
             }
         }
 
@@ -181,7 +191,7 @@ public static class GameManager
         {
             foreach (var user in userList)
             {
-                if (user != exceptUser)
+                if (user == exceptUser)
                 {
                     continue;
                 }
@@ -239,7 +249,7 @@ public static class GameManager
 
         public User(string name, IWebSocketConnection socket, UserConfig config)
         {
-            if (name == null)
+            if (string.IsNullOrEmpty(name))
             {
                 this.name = "anonymous";
             }
@@ -250,24 +260,6 @@ public static class GameManager
 
             userSocket = socket;
             userConfig = config;
-        }
-
-
-        /// <summary>
-        /// New Room | 创建房间
-        /// </summary>
-        /// <param name="roomID">房间ID</param>
-        /// <exception cref="ArgumentException">房间已存在</exception>
-        public void CreateRoom(string roomID)
-        {
-            if (RoomManager.GetRoom(roomID) != null)
-            {
-                throw new ArgumentException("RoomID already exists.");
-            }
-            else
-            {
-                RoomManager.AddRoom(this, roomID);
-            }
         }
 
         /// <summary>

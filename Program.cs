@@ -2,6 +2,7 @@
 using Newtonsoft.Json;
 using Fleck;
 using System.Security.Cryptography.X509Certificates;
+using static Phi_MGUS.GameManager;
 
 namespace Phi_MGUS;
 
@@ -11,8 +12,8 @@ public class Program
     {
         isDebug = true
     };
-    
-    private const string Version = "Dev 0.0.0";
+
+    private const string Version = "Release 0.0.0-Build 00003";
 
     private static void Main(string[] args)
     {
@@ -58,7 +59,7 @@ public class Program
                 LogManager.WriteLog("Secure connection is not enabled or the certificate is invalid.\n" + e.Message,
                     LogManager.LogLevel.Warning);
                 wssserver =
-                    new WebSocketServer($"ws://{config.wssOptions.Host}:{config.wssOptions.Prot}");
+                    new WebSocketServer($"ws://{config.wssOptions.Host}:{config.wssOptions.Port}");
             }
         }
         else
@@ -86,7 +87,7 @@ public class Program
                     LogManager.WriteLog("illegal Binary data received, Drop.", LogManager.LogLevel.Debug);
 
                     //Drop and disconnect | 断开连接
-                    GameManager.UserManager.RemoveUser(socket);
+                    UserManager.RemoveUser(socket);
                     socket.Close();
                 };
             });
@@ -107,7 +108,7 @@ public class Program
                     LogManager.WriteLog("illegal Binary data received, Drop.", LogManager.LogLevel.Debug);
 
                     //Drop and disconnect | 断开连接
-                    GameManager.UserManager.RemoveUser(socket);
+                    UserManager.RemoveUser(socket);
                     socket.Close();
                 };
             });
@@ -150,7 +151,7 @@ public class Program
                     {
                         //print all user | 输出所有用户
                         LogManager.WriteLog("User List:");
-                        foreach (var user in GameManager.UserManager.UserList)
+                        foreach (var user in UserManager.UserList)
                         {
                             LogManager.WriteLog(
                                 $"{user.name} Joined at {user.joinTime.ToString("yyyy-mm-dd hh:mm:ss")} {user.room?.roomID ?? "No Room"}");
@@ -163,16 +164,17 @@ public class Program
                     if (commands[1] == "list")
                     {
                         LogManager.WriteLog("Room List:");
-                        foreach (var room in GameManager.RoomManager.RoomList)
+                        foreach (var room in RoomManager.RoomList)
                         {
                             LogManager.WriteLog($"{room.roomID} Owner: {room.owner.name} User Count: {room.UserCount}");
                         }
                     }
-                    else if (GameManager.RoomManager.GetRoom(commands[1]) != null)
+                    else if (RoomManager.GetRoom(commands[1]) != null)
                     {
                         //print room info | 输出房间信息
-                        var room = GameManager.RoomManager.GetRoom(commands[1]);
-                        LogManager.WriteLog($"Room Info: {room.roomID} Owner: {room.owner.name} User Count: {room.UserCount}");
+                        var room = RoomManager.GetRoom(commands[1]);
+                        LogManager.WriteLog(
+                            $"Room Info: {room.roomID} Owner: {room.owner.name} User Count: {room.UserCount}");
                         LogManager.WriteLog("Member:");
                         for (int i = 0; i < room.UserCount; i++)
                         {
@@ -205,8 +207,8 @@ public class Program
         {
             LogManager.WriteLog("illegal data received, Drop.", LogManager.LogLevel.Warning);
             //Drop | 丢弃并断开连接
-            if (GameManager.UserManager.Contains(socket))
-                GameManager.UserManager.RemoveUser(socket);
+            if (UserManager.Contains(socket))
+                UserManager.RemoveUser(socket);
             socket.Close();
             return;
         }
@@ -217,19 +219,18 @@ public class Program
             //to ConnectionMessage.Client.ClientMetaData | 将客户端发送的消息转换为 ConnectionMessage.Client.ClientMetaData
             var clientMetaData =
                 JsonConvert.DeserializeObject<ConnectionMessage.Client.ClientMetaData>(message)!;
-            if (GameManager.UserManager.Contains(socket))
+            if (UserManager.Contains(socket))
             {
                 //illegal client, Drop it | 非法客户端，丢弃并断开连接
                 LogManager.WriteLog("illegal client, Drop it.", LogManager.LogLevel.Warning);
-                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinServerFailed
+                await socket.Send(new ConnectionMessage.Server.JoinServerFailed
                 {
                     reason = ConnectionMessage.Server.JoinServerFailed.ReasonType
                         .JoinFailedByIllegalClient //客户端已经连接服务器，您的连接将被关闭。
-                }));
+                }.Serialize());
                 LogManager.WriteLog(
-                    $"There are illegal clients attempting to pass metadata multiple times: {GameManager.UserManager.GetUser(socket).name}");
-                GameManager.UserManager.RemoveUser(socket);
-                socket.Close();
+                    $"There are illegal clients attempting to pass metadata multiple times: {UserManager.GetUser(socket).name}");
+                UserManager.GetUser(socket).Disconnect();
                 return;
             }
 
@@ -240,28 +241,27 @@ public class Program
                 {
                     if (string.IsNullOrEmpty(data.password))
                     {
-                        await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinServerFailed
+                        await socket.Send(new ConnectionMessage.Server.JoinServerFailed
                         {
                             reason =
                                 ConnectionMessage.Server.JoinServerFailed.ReasonType
                                     .AuthFailedByPwdNull //服务器是私有的，但提供的密码为空。您的连接将被关闭。
-                        }));
+                        }.Serialize());
                     }
                     else
                     {
-                        await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinServerFailed
+                        await socket.Send(new ConnectionMessage.Server.JoinServerFailed
                         {
                             reason =
                                 ConnectionMessage.Server.JoinServerFailed.ReasonType
                                     .AuthFailedByPwdIncorrect //服务器是私有的，但提供的密码无效。您的连接将被关闭。
-                        }));
+                        }.Serialize());
                     }
 
                     LogManager.WriteLog(
                         $"The client attempted to connect to the server, but authentication failed: {data.userName}");
                     //Authentication failed, Drop and disconnect | 认证失败，丢弃并断开连接
-                    GameManager.UserManager.RemoveUser(socket);
-                    socket.Close();
+                    UserManager.GetUser(socket).Disconnect();
                     return;
                 }
             }
@@ -272,27 +272,27 @@ public class Program
             //Check all parameters | 检查所有参数
             if (data.isDebugger == null || data.isSpectator == null || data.features == null)
             {
-                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinServerFailed
+                await socket.Send(new ConnectionMessage.Server.JoinServerFailed
                 {
                     reason = ConnectionMessage.Server.JoinServerFailed.ReasonType
                         .JoinFailedByInvalidParameter //非法参数，请检查后重试。
-                }));
+                }.Serialize());
                 return;
             }
 
-            GameManager.UserManager.AddUser(clientMetaData.data.userName, socket, new GameManager.User.UserConfig
+            UserManager.AddUser(clientMetaData.data.userName, socket, new User.UserConfig
             {
                 isAnonymous = data.userName == null,
                 isDebugger = data.isDebugger,
                 isSpectator = data.isSpectator,
                 featureSupport = data.features
             });
-            await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinServerSuccess()));
+            await socket.Send(new ConnectionMessage.Server.JoinServerSuccess().Serialize());
             return;
         }
 
         // Check if the user has completed the return of metadata | 检查用户是否已经返回元数据
-        if (!GameManager.UserManager.Contains(socket))
+        if (!UserManager.Contains(socket))
         {
             socket.Close();
             LogManager.WriteLog("illegal client, Drop it.", LogManager.LogLevel.Warning);
@@ -304,33 +304,50 @@ public class Program
             // To ConnectionMessage.Client.NewRoom | 将客户端发送的消息转换为 ConnectionMessage.Client.NewRoom
             ConnectionMessage.Client.NewRoom newRoom =
                 JsonConvert.DeserializeObject<ConnectionMessage.Client.NewRoom>(message)!;
-            var user = GameManager.UserManager.GetUser(socket);
-            if (user.status == GameManager.User.Status.InRoom)
+            var user = UserManager.GetUser(socket);
+            if (user.status == User.Status.InRoom)
             {
-                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.NewRoomFailed
+                await socket.Send(new ConnectionMessage.Server.NewRoomFailed
                 {
                     reason = ConnectionMessage.Server.NewRoomFailed.ReasonType.AlreadyInRoom // 你已经在房间里了。 
-                }));
+                }.Serialize());
                 LogManager.WriteLog($"User {user.name} tried to create a room while in a room."); // 用户尝试在房间里创建房间。
                 return;
             }
 
-            var room = GameManager.RoomManager.GetRoom(newRoom.data.roomID);
+            var room = RoomManager.GetRoom(newRoom.data.roomID);
             if (room != null)
             {
-                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.NewRoomFailed
+                await socket.Send(new ConnectionMessage.Server.NewRoomFailed
                 {
                     reason = ConnectionMessage.Server.NewRoomFailed.ReasonType.RoomAlreadyExists // 房间已存在。
-                }));
+                }.Serialize());
                 LogManager.WriteLog(
                     $"User {user.name} tried to create a room with the same name."); // 用户尝试使用相同的名称创建房间。
                 return;
             }
 
-
-            GameManager.UserManager.GetUser(socket).CreateRoom(newRoom.data.roomID);
-            await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.NewRoomSuccess()));
-            LogManager.WriteLog($"User {user.name} has created a new room {user.room!.roomID}.");
+            try
+            {
+                RoomManager.AddRoom(user, newRoom.data.roomID, newRoom.data.maxUser);
+                await socket.Send(new ConnectionMessage.Server.NewRoomSuccess().Serialize());
+                LogManager.WriteLog($"User {user.name} has created a new room {user.room!.roomID}.");
+            }
+            catch (ArgumentException e)
+            {
+                await socket.Send(new ConnectionMessage.Server.NewRoomFailed
+                {
+                    reason = ConnectionMessage.Server.NewRoomFailed.ReasonType.RoomIdentifierInvalid // 房间名不合法。
+                }.Serialize());
+                LogManager.WriteLog($"User {user.name} tried to create a room with an illegal name: {e.Message}");
+            }
+            catch (Exception e)
+            {
+                await socket.Send(new ConnectionMessage.Server.NewRoomFailed().Serialize());
+                // Failed to create room | 创建房间失败
+                LogManager.WriteLog($"User {user.name} tried to create a room, but failed: {e.Message}",
+                    LogManager.LogLevel.Error);
+            }
         }
 
         if (msg.action == "joinRoom")
@@ -338,52 +355,97 @@ public class Program
             // To ConnectionMessage.Client.JoinRoom | 将客户端发送的消息转换为 ConnectionMessage.Client.JoinRoom
             ConnectionMessage.Client.JoinRoom joinRoom =
                 JsonConvert.DeserializeObject<ConnectionMessage.Client.JoinRoom>(message)!;
-            var user = GameManager.UserManager.GetUser(socket);
-            if (user.status == GameManager.User.Status.InRoom)
+            var user = UserManager.GetUser(socket);
+            if (user.status == User.Status.InRoom)
             {
-                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinRoomFailed
+                await socket.Send(new ConnectionMessage.Server.JoinRoomFailed
                 {
                     reason = ConnectionMessage.Server.JoinRoomFailed.ReasonType.AlreadyInRoom // 你已经在房间里了。 
-                }));
+                }.Serialize());
                 LogManager.WriteLog($"User {user.name} tried to join a room while in a room."); // 用户尝试在房间里加入房间。
                 return;
             }
 
             //Find the room | 查找房间
-            var room = GameManager.RoomManager.GetRoom(joinRoom.data.roomID);
+            var room = RoomManager.GetRoom(joinRoom.data.roomID);
             if (room != null)
             {
-                room.Join(user);
-                LogManager.WriteLog($"User {user.name} has joined the {room.roomID} room.");
-                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinRoomSuccess()));
+                if (room.UserCount ! < room.maxUser)
+                {
+                    await socket.Send(new ConnectionMessage.Server.JoinRoomFailed
+                    {
+                        reason = ConnectionMessage.Server.JoinRoomFailed.ReasonType.RoomIsFull // 房间不存在。
+                    }.Serialize());
+                    LogManager.WriteLog($"User {user.name} tried to join a full room."); // 用户尝试加入不存在的房间。
+                }
+                else
+                {
+                    room.Join(user);
+                    LogManager.WriteLog($"User {user.name} has joined the {room.roomID} room.");
+                    await socket.Send(new ConnectionMessage.Server.JoinRoomSuccess().Serialize());
+                }
             }
             else
             {
-                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.JoinRoomFailed
+                await socket.Send(new ConnectionMessage.Server.JoinRoomFailed
                 {
                     reason = ConnectionMessage.Server.JoinRoomFailed.ReasonType.RoomNotFound // 房间不存在。
-                }));
+                }.Serialize());
                 LogManager.WriteLog($"User {user.name} tried to join a room that does not exist."); // 用户尝试加入不存在的房间。
-                return;
             }
+
+            return;
         }
 
         if (msg.action == "leaveRoom")
         {
-            var user = GameManager.UserManager.GetUser(socket);
-            if (user.status == GameManager.User.Status.InRoom)
+            var user = UserManager.GetUser(socket);
+            if (user.status == User.Status.InRoom)
             {
                 user.room!.Leave(user);
                 LogManager.WriteLog($"User {user.name} has left the {user.room!.roomID} room.");
-                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.LeaveRoomSuccess()));
+                await socket.Send(new ConnectionMessage.Server.LeaveRoomSuccess().Serialize());
             }
             else
             {
-                await socket.Send(JsonConvert.SerializeObject(new ConnectionMessage.Server.LeaveRoomFailed
+                await socket.Send(new ConnectionMessage.Server.LeaveRoomFailed
                 {
                     reason = ConnectionMessage.Server.LeaveRoomFailed.ReasonType.NotInRoom // 你不在房间里。
-                }));
+                }.Serialize());
                 LogManager.WriteLog($"User {user.name} tried to leave a room while not in a room."); // 用户尝试离开房间，但未在房间里。
+            }
+        }
+
+        if (msg.action == "selectChart")
+        {
+            var user = UserManager.GetUser(socket);
+            var data = JsonConvert.DeserializeObject<ConnectionMessage.Client.SelectChart>(message)!.data;
+            if (user.status == User.Status.InRoom)
+            {
+                var room = user.room!;
+                if (room.owner == user)
+                {
+                    room.chartMD5 = data.chartMD5;
+                    LogManager.WriteLog(
+                        $"User {user.name} has selected a chart {data.chartMD5} in the {room.roomID} room.");
+                }
+                else
+                {
+                    await socket.Send(new ConnectionMessage.Server.SelectChartFailed
+                    {
+                        reason = ConnectionMessage.Server.SelectChartFailed.ReasonType.InsufficientPermissions // 权限不足。
+                    }.Serialize());
+                    LogManager.WriteLog(
+                        $"User {user.name} tried to select a chart while not being the owner of the room.");
+                }
+            }
+            else
+            {
+                await socket.Send(new ConnectionMessage.Server.SelectChartFailed
+                {
+                    reason = ConnectionMessage.Server.SelectChartFailed.ReasonType.NotInRoom // 你不在房间里。
+                }.Serialize());
+                LogManager.WriteLog($"User {user.name} tried to select a chart while not in a room.");
             }
         }
     }
@@ -392,12 +454,10 @@ public class Program
     {
         // Send GetData message, get metadata. | 发送 GetData 消息，获取元数据
         await socket.Send(
-            JsonConvert.SerializeObject(
-                new ConnectionMessage.Server.GetData
-                {
-                    needPassword = config.isPrivate
-                }
-            )
+            new ConnectionMessage.Server.GetData
+            {
+                needPassword = config.isPrivate
+            }.Serialize()
         );
     }
 
@@ -406,18 +466,18 @@ public class Program
         LogManager.WriteLog(e.Message, LogManager.LogLevel.Debug);
         //WriteLog, Socket has been drop | 输出日志，连接被丢弃
         LogManager.WriteLog("Socket has been drop, because of an error: " + e.Message, LogManager.LogLevel.Debug);
-        LogManager.WriteLog($"User {GameManager.UserManager.GetUser(socket).name} unexpectedly disconnected",
+        LogManager.WriteLog($"User {UserManager.GetUser(socket).name} unexpectedly disconnected",
             LogManager.LogLevel.Warning);
 
         //Drop and disconnect | 丢弃并断开连接
-        GameManager.UserManager.GetUser(socket).Disconnect();
+        UserManager.GetUser(socket).Disconnect();
         socket.Close();
     }
 
     private static async Task ServerOnClose(IWebSocketConnection socket)
     {
-        LogManager.WriteLog($"user{GameManager.UserManager.GetUser(socket).name} disconnected.");
-        GameManager.UserManager.GetUser(socket).Disconnect();
+        LogManager.WriteLog($"user{UserManager.GetUser(socket).name} disconnected.");
+        UserManager.GetUser(socket).Disconnect();
     }
 
     /// <summary>
@@ -456,7 +516,7 @@ public class Program
     public static void Broadcast(string message)
     {
         //Broadcast message to all clients
-        foreach (var user in GameManager.UserManager.UserList)
+        foreach (var user in UserManager.UserList)
         {
             user.userSocket.Send(message);
         }
