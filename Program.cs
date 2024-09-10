@@ -13,7 +13,7 @@ public class Program
         isDebug = true
     };
 
-    private const string Version = "Release 0.0.0-Build 00003";
+    private const string Version = "Release 0.0.0-Build 00004";
 
     private static void Main(string[] args)
     {
@@ -382,7 +382,18 @@ public class Program
                 {
                     room.Join(user);
                     LogManager.WriteLog($"User {user.name} has joined the {room.roomID} room.");
-                    await socket.Send(new ConnectionMessage.Server.JoinRoomSuccess().Serialize());
+                    await socket.Send(new ConnectionMessage.Server.JoinRoomSuccess
+                    {
+                        data =
+                        {
+                            roomID = room.roomID,
+                            userList = room.userList.Select(u => u.name).ToList(),
+                            chartMD5 = room.chartInfo.MD5,
+                            chartUrl = room.chartInfo.url,
+                            roomOwner = room.owner.name
+                        }
+                        
+                    }.Serialize());
                 }
             }
             else
@@ -425,7 +436,8 @@ public class Program
                 var room = user.room!;
                 if (room.owner == user)
                 {
-                    room.chartMD5 = data.chartMD5;
+                    //Select chart | 选择谱面
+                    room.chartInfo = new Room.ChartInfo(data.chartMD5, data.chartUrl);
                     LogManager.WriteLog(
                         $"User {user.name} has selected a chart {data.chartMD5} in the {room.roomID} room.");
                 }
@@ -446,6 +458,36 @@ public class Program
                     reason = ConnectionMessage.Server.SelectChartFailed.ReasonType.NotInRoom // 你不在房间里。
                 }.Serialize());
                 LogManager.WriteLog($"User {user.name} tried to select a chart while not in a room.");
+            }
+        }
+
+        if (msg.action == "gameStart")
+        {
+            var user = UserManager.GetUser(socket);
+            if (user.status != User.Status.InRoom)
+            {
+                //Not in room, do not do anything | 不在房间里，不做任何操作
+                return;
+            }
+            var room = user.room!;
+            if (room.owner != user)
+            {
+                //Insufficient permissions,do not do anything | 权限不足，不做任何操作
+                //Let the front end judge for itself | 让前端自己判断
+                return;
+            }
+            else
+            {
+                if (room.chartInfo != null)
+                {
+                    room.GameStart();
+                }
+                else
+                {
+                    //No chart selected, do not do anything | 未选择谱面，不做任何操作
+                    //Let the front end judge for itself | 让前端自己判断
+                }
+                return;
             }
         }
     }
