@@ -22,6 +22,12 @@ public class Program
         if (File.Exists("config.json"))
         {
             config = JsonConvert.DeserializeObject<Config>(File.ReadAllText("config.json"))!;
+            if (config.ConfigVersion != 0)
+            {
+                LogManager.WriteLog("The configuration file is outdated and will be updated.", LogManager.LogLevel.Warning);
+                config.ConfigVersion = 0;
+                File.WriteAllText("config.json", JsonConvert.SerializeObject(config, Formatting.Indented));
+            }
             if (config.isDebug)
             {
                 LogManager.WriteLog("Debug mode is enabled.", LogManager.LogLevel.Warning);
@@ -30,7 +36,7 @@ public class Program
         else
         {
             File.WriteAllText("config.json", JsonConvert.SerializeObject(config, Formatting.Indented));
-            LogManager.JustConsoleWrite(
+            LogManager.WriteLog(
                 "We have generated a default configuration file. If modifications are needed, please exit the program and modify \"config.json\", and then run it again.",
                 LogManager.LogLevel.Warning);
         }
@@ -527,6 +533,7 @@ public class Program
     /// </summary>
     public class Config
     {
+        public int ConfigVersion = 0;
         public bool isPrivate = false;
         public bool RoomChat = false;
         public bool isDebug = false;
