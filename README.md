@@ -11,6 +11,8 @@ MGUS，也就是Multiplayer Game Universal Server的简写，项目全称**Phigr
 服务器不依赖任何社区，不存储持续存储任何客户端以及用户数据，所有数据交换都由客户端完成并由服务端进行转发。  
 使用Json作为信息格式，如果您的目标语言为 `C#`，您完全可以直接复制 `ConnectionMessage.cs` 文件到您的项目，文件中存储了所有信息格式并附带注释。
 
+很遗憾的通知大家，这个项目废弃了，对不起。。。
+
 # 功能支持状态
 
 - [x] WebSocket SSL
